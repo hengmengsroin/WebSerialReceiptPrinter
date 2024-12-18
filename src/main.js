@@ -1,6 +1,6 @@
 import EventEmitter from "./event-emitter.js";
 
-class ReceiptPrinterDriver {}
+class ReceiptPrinterDriver { }
 
 class WebSerialReceiptPrinter extends ReceiptPrinterDriver {
 
@@ -11,22 +11,22 @@ class WebSerialReceiptPrinter extends ReceiptPrinterDriver {
 	#reader = null;
 	#queue = [];
 	#state = {
-		running:	false,
-		closing:	false
+		running: false,
+		closing: false
 	}
 
 	constructor(options) {
 		super();
-		
+
 		this.#emitter = new EventEmitter();
 
-		this.#options =	Object.assign({
-			baudRate:		9600,
-			bufferSize:		255,
-			dataBits:		8,
-			flowControl:	'none',
-			parity:			'none',
-			stopBits:		1
+		this.#options = Object.assign({
+			baudRate: 9600,
+			bufferSize: 255,
+			dataBits: 8,
+			flowControl: 'none',
+			parity: 'none',
+			stopBits: 1
 		}, options);
 
 		navigator.serial.addEventListener('disconnect', event => {
@@ -39,13 +39,15 @@ class WebSerialReceiptPrinter extends ReceiptPrinterDriver {
 	async connect() {
 		try {
 			let port = await navigator.serial.requestPort();
-			
 			if (port) {
 				await this.#open(port);
+				return true;
 			}
+			return false;
 		}
-		catch(error) {
+		catch (error) {
 			console.log('Could not connect! ' + error);
+			return false;
 		}
 	}
 
@@ -67,20 +69,26 @@ class WebSerialReceiptPrinter extends ReceiptPrinterDriver {
 	}
 
 	async #open(port) {
-		this.#port = port;
-		this.#state.closing = false;
+		try {
+			this.#port = port;
+			this.#state.closing = false;
 
-		await this.#port.open(this.#options);
+			await this.#port.open(this.#options);
 
-		let info = this.#port.getInfo();
-		
-		this.#emitter.emit('connected', {
-			type:				'serial',
-			vendorId: 			info.usbVendorId || null,
-			productId: 			info.usbProductId || null,
-			language: 			null,
-			codepageMapping:	null
-		});
+			let info = this.#port.getInfo();
+
+			this.#emitter.emit('connected', {
+				type: 'serial',
+				vendorId: info.usbVendorId || null,
+				productId: info.usbProductId || null,
+				language: null,
+				codepageMapping: null
+			});
+			return true;
+		} catch (error) {
+			console.log('Could not open port! ' + error);
+			return false;
+		}
 	}
 
 	async disconnect() {
@@ -106,11 +114,11 @@ class WebSerialReceiptPrinter extends ReceiptPrinterDriver {
 
 	async #read() {
 		while (this.#port.readable && this.#state.closing === false) {
-            this.#reader = this.#port.readable.getReader();
+			this.#reader = this.#port.readable.getReader();
 
 			try {
 				while (true) {
-                    const { value, done } = await this.#reader.read();
+					const { value, done } = await this.#reader.read();
 
 					if (done) {
 						break;
@@ -123,9 +131,9 @@ class WebSerialReceiptPrinter extends ReceiptPrinterDriver {
 			} finally {
 				this.#reader.releaseLock();
 			}
-		}	
+		}
 	}
-	
+
 	async print(command) {
 		this.#queue.push(command);
 		this.run();
@@ -135,7 +143,7 @@ class WebSerialReceiptPrinter extends ReceiptPrinterDriver {
 		if (this.#state.closing) {
 			return;
 		}
-		
+
 		if (this.#state.running) {
 			return;
 		}
